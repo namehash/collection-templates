@@ -1,0 +1,20 @@
+{
+    "data": [
+        {
+            "collection_name": "marvel heroes",
+            "keywords": ["marvel", "superhero"],
+            "names": [
+                "hulk", "CaptainAmerica", "deadpool", "doctorstrange", "president of america"
+            ],
+            "description": "marvel heroes doing epic things"
+        },
+        {
+            "collection_name": "dc heroes",
+            "keywords": ["dc", "superhero"],
+            "names": [
+                "superwoman", "Batman", "wonderwoman"
+            ],
+            "description": "dc heroes doing epic things"
+        }
+    ]
+}
