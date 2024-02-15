@@ -21,6 +21,9 @@ from elasticsearch.helpers import streaming_bulk, scan
 from hydra import initialize_config_module, compose
 from hydra.core.global_hydra import GlobalHydra
 from inspector.label_inspector import Inspector
+from ens_normalize import ens_cure
+from unidecode import unidecode
+import myunicode
 import boto3
 import numpy as np
 import wordninja
@@ -29,8 +32,8 @@ from create_inlets import (
     CollectionDataset,
 )
 from create_merged import (
+    memoize_ram,
     configure_interesting_score,
-    configure_force_normalize,
     configure_nomrmal_name_to_hash,
     read_csv_domains,
     AvatarEmoji,
@@ -181,6 +184,84 @@ def generate_random_banner_image():
     return f'tc-{banner_image_number:02d}.png'
 
 
+def force_normalize(member: str) -> str:
+    def decode(seq: str) -> str:
+        return ''.join([
+            unidecode(c, errors='ignore') if myunicode.script_of(c) == 'Latin' else c
+            for c in seq
+        ])
+
+    try:
+        curated_token = ens_cure(member)
+    except Exception as ex:
+        decoded_member = decode(member)
+        curated_token = ens_cure(decoded_member)
+    else:
+        if curated_token != member:
+            decoded_member = decode(member)
+            curated_token = ens_cure(decoded_member)
+
+    curated_token2 = curated_token.replace("'", '')
+
+    curated_token3 = ''.join(
+        [unidecode(c, errors='ignore') if myunicode.script_of(c) == 'Latin' else c for c in curated_token2])
+
+    curated_token2 = curated_token3
+
+    if curated_token2 != curated_token:
+        curated_token2 = ens_cure(curated_token2)
+
+    return curated_token2
+
+
+def force_normalize_member(member: Member, is_pretokenized: bool = False) -> Optional[Member]:
+    try:
+        normalized_name = force_normalize(member.normalized)
+    except Exception as ex:
+        print(f'Failed to normalize name: {member.normalized} - {ex}')
+        return None
+
+    # if the input is unnormalized, we can try to normalize the name
+    if normalized_name != member.normalized:
+        print(f'Unnormalized name: {member.normalized}, trying to normalize...')
+
+        # if the input is not pretokenized, we can normalize the name and then tokenize it
+        if not is_pretokenized:
+            normalized_member = Member(normalized=normalized_name,
+                                       tokenized=tokenize_name(normalized_name))  # tokenizing normalized name
+            print(f'  Normalized to: {normalized_member.normalized}, tokenized: {normalized_member.tokenized}')
+
+        # if the input is pretokenized, we then try to tokenize the tokens, and see
+        # if their concatenation is normalized, and if not, we skip the member
+        else:
+            try:
+                normalized_tokens = [force_normalize(token) for token in member.tokenized]
+            except Exception as ex:
+                print(f'  Failed to normalize pretokenized name tokens: {member.tokenized} - {ex}')
+                return None
+
+            normalized_member = Member(normalized=''.join(normalized_tokens),
+                                       tokenized=[token for token in normalized_tokens if token])
+
+            try:
+                normalized_pretokenized_name = force_normalize(normalized_member.normalized)
+            except Exception as ex:
+                print(f'  Failed to normalize pretokenized name: {normalized_member.normalized} - {ex}')
+                return None
+
+            if normalized_pretokenized_name != normalized_member.normalized:
+                print(f'  Failed to normalize pretokenized name {member.tokenized}, '
+                      f'by tokenizing and normalizing each token, since their concatenation '
+                      f'({normalized_pretokenized_name}) is not normalized.')
+                return None
+            else:
+                print(f'  Normalized pretokenized name to: {normalized_member.normalized}, '
+                      f'tokenized: {normalized_member.tokenized}')
+
+        return normalized_member
+    return member
+
+
 def prepare_custom_collection(
         collection_json: dict,
         inspector: Inspector,
@@ -189,7 +270,7 @@ def prepare_custom_collection(
         force_normalize_function: Any,
         normal_name_to_hash_function: Any,
         avatar_emoji: AvatarEmoji,
-) -> dict:
+) -> Optional[dict]:
 
     current_time = time.time() * 1000
 
@@ -209,7 +290,16 @@ def prepare_custom_collection(
 
         member = Member(normalized=member_json['normalized_label'],
                         tokenized=member_json['tokenized_label'])
-        members.append(member)
+
+        is_pretokenized = "tokenized_label" in member_json
+        member = force_normalize_member(member, is_pretokenized)
+        if member is not None:
+            members.append(member)
+
+    if not members:
+        print(f"Skipping collection {collection_data['collection_name']} "
+              f"because it has no members (or all members are invalid)")
+        return None
 
     collection = Collection(
         id=collection_data['collection_id'],
@@ -349,7 +439,6 @@ def prepare_custom_collections(
 
     domains = read_csv_domains(domains_path)
     interesting_score_function = configure_interesting_score(inspector, interesting_score_path)
-    force_normalize_function = configure_force_normalize(force_normalize_path)
     normal_name_to_hash_function = configure_nomrmal_name_to_hash(name_to_hash_path)
 
     avatar_emoji = AvatarEmoji(avatar_emoji_path)  # FIXME how do we get type?
@@ -361,11 +450,12 @@ def prepare_custom_collections(
                 inspector=inspector,
                 domains=domains,
                 interesting_score_function=interesting_score_function,
-                force_normalize_function=force_normalize_function,
+                force_normalize_function=force_normalize,
                 normal_name_to_hash_function=normal_name_to_hash_function,
                 avatar_emoji=avatar_emoji,
             )
-            writer.write(prepared_collection)
+            if prepared_collection is not None:
+                writer.write(prepared_collection)
 
 
 def produce_custom_update_operations(custom_collections_path: str, custom_update_operations: str):
