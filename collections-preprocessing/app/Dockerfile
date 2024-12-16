@@ -9,4 +9,7 @@ COPY src ${LAMBDA_TASK_ROOT}
 
 ENV PYTHONPATH "${PYTHONPATH}:${LAMBDA_TASK_ROOT}"
 
+# set appropriate api stage
+ENV API_STAGE "dev"
+
 CMD [ "main.handler" ]
