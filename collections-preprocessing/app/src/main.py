@@ -7,8 +7,10 @@ from model import CollectionListPOSTRequest, AugmentedCollectionListPOSTResponse
 from preprocessing_service import preprocess_collections
 
 
+STAGE = os.environ.get("API_STAGE", "")  # API_STAGE is for example one of ('dev', 'test', 'prod')
+
 app = FastAPI(
-    root_path=os.environ.get("API_STAGE", "dev"),  # API_STAGE in ('dev', 'test', 'prod')
+    root_path=f'/{STAGE}',
     docs_url='/docs',
     title='Collections preprocessing',
     description='This service provides preprocessing of collections with POST at /collections endpoint.',
@@ -27,7 +29,7 @@ async def get_augmented_collections(collections_request: CollectionListPOSTReque
     return AugmentedCollectionListPOSTResponse(data=augmented_collection_list)
 
 
-handler = Mangum(app)
+handler = Mangum(app, api_gateway_base_path=f'/{STAGE}')
 
 if __name__ == '__main__':
     uvicorn.run(app=app, port=9100)
