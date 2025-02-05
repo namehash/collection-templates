@@ -21,7 +21,9 @@ from create_inlets import CONFIG, CollectionDataset, ElasticsearchConfig
 from create_merged import MERGED_FINAL
 
 UPDATE_OPERATIONS = CollectionDataset(f"{CONFIG.remote_prefix}update-operations.jsonl")
-PREVIOUS_MERGED_FINAL = CollectionDataset(f"{CONFIG.remote_prefix}archived_latest_merged_final.jsonl")
+PREVIOUS_MERGED_FINAL = CollectionDataset(
+    f"{CONFIG.remote_prefix}archived_{CONFIG.elasticsearch.index}_latest_merged_final.jsonl"
+)
 
 
 COMPARING_FIELDS = ['data', 'template', 'metadata.members_count', 'metadata.collection_name_log_probability']
@@ -425,7 +427,9 @@ with DAG(
         op_kwargs={
             "original": MERGED_FINAL.local_name(),
             "latest": PREVIOUS_MERGED_FINAL.local_name(),
-            "archived": MERGED_FINAL.local_name(prefix='archived_' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S_'))
+            "archived": MERGED_FINAL.local_name(
+                prefix=f'archived_{CONFIG.elasticsearch.index}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_")}'
+            )
         },
     )
     archive_merged_final_task.doc_md = dedent(

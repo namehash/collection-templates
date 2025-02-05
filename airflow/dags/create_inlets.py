@@ -1,7 +1,9 @@
 
 from datetime import datetime, timedelta
 from textwrap import dedent
+from pathlib import Path
 import boto3
+import shutil
 import re
 import os
 import airflow
@@ -45,6 +47,7 @@ class Config:
 
 CONFIG = Config(
     email="apohllo@o2.pl",
+    # FIXME move this to separate directory, so we don't mix files for different pipelines
     local_prefix="/home/airflow/data/",
     remote_prefix="file:///home/airflow/data/",
     date_str=datetime.now().strftime("%Y%m%d"),
@@ -426,6 +429,16 @@ with DAG(
     """
     )
 
+
+def remove_intermediate_files():
+    for file in Path(CONFIG.local_prefix).glob('*'):
+        if file.is_file() and not file.name.startswith('archived_'):
+            file.unlink()
+
+        if file.is_dir():
+            shutil.rmtree(file)
+
+
 @provide_session
 def clear_dags(session=NEW_SESSION):
     with session:
@@ -457,9 +470,9 @@ with DAG(
     tags=["prepare"],
     schedule=CONFIG.run_interval,
 ) as dag:
-    remove_files_task = BashOperator(
+    remove_files_task = PythonOperator(
         task_id="remove-files",
-        bash_command=f"rm -rf {CONFIG.local_prefix}/*"
+        python_callable=remove_intermediate_files
     )
 
     remove_files_task.doc_md = dedent(
