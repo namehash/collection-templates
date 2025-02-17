@@ -95,7 +95,7 @@ The system enables discovery of names through their conceptual connections - whe
 ---
 
 ### [🔀](airflow/dags/create_merged.py) Interesting Score Cache DAG
-   - Creates caches for normalized names and uses [NameAI](https://nameai.dev/) to calculate interesting scores
+   - Creates caches for normalized names and uses [NameAI](https://nameai.io/) to calculate interesting scores
    - Processes unique list and category members
    - Uploads cache to S3 for reuse
 
