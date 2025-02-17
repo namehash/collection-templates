@@ -1,4 +1,4 @@
-# Collections Templates Pipeline
+# NameGraph Collections Pipeline
 
 A sophisticated Apache Airflow pipeline for creating and managing topic-based name collections enriched with metadata and semantic relationships.
 
@@ -36,7 +36,7 @@ The system enables discovery of names through their conceptual connections - whe
    - Cleans up temporary files
    - Creates date file for new processing run
    - Sets up S3 backup directory
-   - Clears status of collection template DAGs
+   - Clears status of collections pipeline DAGs
 
 ---
 
